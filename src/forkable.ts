@@ -22,10 +22,6 @@ interface GraphQLMenusResponse {
 	menus: ForkableMenu[];
 }
 
-interface GraphQLReplacePieceResponse {
-	replacePiece: ReplacePieceResult;
-}
-
 interface ForkableUser {
 	email: string;
 }
@@ -119,7 +115,7 @@ interface ForkableMenu {
 	sections: ForkableMenuSection[];
 }
 
-interface ReplacePieceResult {
+interface PieceMutationResult {
 	errors: string[] | null;
 	errorDetails: Record<string, unknown>;
 	delivery: {
@@ -128,6 +124,10 @@ interface ReplacePieceResult {
 		address: ForkableAddress;
 		orders: ForkableOrder[];
 	};
+}
+
+interface GraphQLPieceMutationResponse {
+	result: PieceMutationResult;
 }
 
 export interface MealSummary {
@@ -257,6 +257,49 @@ function assertIsoDate(date: string): void {
 
 function normalized(value: string | null | undefined): string {
 	return (value ?? "").trim().toLowerCase();
+}
+
+function searchable(value: string | null | undefined): string {
+	return normalized(value)
+		.normalize("NFKD")
+		.replace(/[\u0300-\u036f]/g, "")
+		.replace(/[^a-z0-9]+/g, " ")
+		.replace(/\s+/g, " ")
+		.trim();
+}
+
+function uniqueFuzzyMatch<T>(
+	candidates: T[],
+	input: string,
+	getLabel: (candidate: T) => string,
+): T | null {
+	const expected = searchable(input);
+	if (!expected) {
+		return null;
+	}
+
+	const exactMatches = candidates.filter(
+		(candidate) => searchable(getLabel(candidate)) === expected,
+	);
+	if (exactMatches.length > 1) {
+		throw new Error(
+			`"${input}" matches multiple choices: ${exactMatches.map((candidate) => getLabel(candidate)).join(", ")}`,
+		);
+	}
+	if (exactMatches.length === 1) {
+		return exactMatches[0];
+	}
+
+	const fuzzyMatches = candidates.filter((candidate) => {
+		const actual = searchable(getLabel(candidate));
+		return actual.includes(expected) || expected.includes(actual);
+	});
+	if (fuzzyMatches.length > 1) {
+		throw new Error(
+			`"${input}" matches multiple choices: ${fuzzyMatches.map((candidate) => getLabel(candidate)).join(", ")}`,
+		);
+	}
+	return fuzzyMatches[0] ?? null;
 }
 
 function matchesBySubstring(actual: string, expected: string | null | undefined): boolean {
@@ -666,15 +709,26 @@ export class ForkableClient {
 		const selectionsHash: Record<string, number[]> = {};
 		const appliedSelections: Array<{ modifier: string; option: string }> = [];
 		const missingRequired: string[] = [];
+		const visibleModifiers = (item.modifiers ?? []).filter((modifier) => !modifier.hidden);
+		const selectionsByModifierId = new Map<number, MealSelectionInput>();
 
-		for (const modifier of item.modifiers ?? []) {
-			if (modifier.hidden) {
-				continue;
+		for (const selection of selections ?? []) {
+			const modifier = uniqueFuzzyMatch(visibleModifiers, selection.modifier, (candidate) => candidate.name);
+			if (!modifier) {
+				throw new Error(
+					`Unknown modifier "${selection.modifier}". Available modifiers: ${visibleModifiers.map((candidate) => candidate.name).join(", ")}`,
+				);
 			}
 
-			const selection = selections?.find(
-				(candidate) => normalized(candidate.modifier) === normalized(modifier.name),
-			);
+			if (selectionsByModifierId.has(modifier.id)) {
+				throw new Error(`Multiple selections provided for "${modifier.name}". Provide a single option.`);
+			}
+
+			selectionsByModifierId.set(modifier.id, selection);
+		}
+
+		for (const modifier of visibleModifiers) {
+			const selection = selectionsByModifierId.get(modifier.id);
 			if (!selection) {
 				if (modifier.required) {
 					missingRequired.push(
@@ -685,14 +739,18 @@ export class ForkableClient {
 			}
 
 			if (normalized(selection.option) === "none" || normalized(selection.option) === "no selection") {
+				if (modifier.required) {
+					throw new Error(
+						`"${modifier.name}" is required. Choose one of: ${modifier.options.map((option) => option.name).join(", ")}`,
+					);
+				}
+
 				selectionsHash[String(modifier.id)] = [-1];
 				appliedSelections.push({ modifier: modifier.name, option: "none" });
 				continue;
 			}
 
-			const option = modifier.options.find(
-				(candidate) => normalized(candidate.name) === normalized(selection.option),
-			);
+			const option = uniqueFuzzyMatch(modifier.options, selection.option, (candidate) => candidate.name);
 			if (!option) {
 				throw new Error(
 					`Unknown option "${selection.option}" for "${modifier.name}". Available options: ${modifier.options.map((candidate) => candidate.name).join(", ")}`,
@@ -771,16 +829,24 @@ export class ForkableClient {
 
 		const [{ delivery, menu, item }] = candidates;
 		const meal = mealToSummary(item);
+		let existingOrder: ForkableOrderPiece | null = null;
+		let appliedSelections: Array<{ modifier: string; option: string }> = [];
 
 		try {
 			const viewer = await this.getViewer();
-			const existingOrder = existingOrderPieceForDelivery(delivery, viewer.email);
-			const { selectionsHash, appliedSelections } = this.buildSelectionsHash(item, input.selections);
+			existingOrder = existingOrderPieceForDelivery(delivery, viewer.email);
+			const { selectionsHash, appliedSelections: normalizedSelections } = this.buildSelectionsHash(
+				item,
+				input.selections,
+			);
+			appliedSelections = normalizedSelections;
 
-			const data = await this.graphql<GraphQLReplacePieceResponse>(
+			const mutationName = existingOrder ? "replacePiece" : "addPiece";
+			const inputType = existingOrder ? "ReplacePieceInput!" : "AddPieceInput!";
+			const data = await this.graphql<GraphQLPieceMutationResponse>(
 				`
-					mutation ReplacePiece($input: ReplacePieceInput!) {
-						replacePiece(input: $input) {
+					mutation MutatePiece($input: ${inputType}) {
+						result: ${mutationName}(input: $input) {
 							errors
 							errorDetails
 							delivery {
@@ -812,15 +878,15 @@ export class ForkableClient {
 						instructions: input.instructions ?? null,
 						selectionsHash,
 						myMeals: true,
-						...(existingOrder ? { oldPieceId: existingOrder.id } : {}),
+						...(existingOrder ? { oldPieceId: existingOrder.id } : { userId: viewer.id }),
 					},
 				},
 			);
 
-			if (data.replacePiece.errors?.length) {
+			if (data.result.errors?.length) {
 				return {
 					success: false,
-					message: `Order failed: ${data.replacePiece.errors.join(", ")}`,
+					message: `Order failed: ${data.result.errors.join(", ")}`,
 					date: input.date,
 					deliveryId: delivery.id,
 					locationId: delivery.mealClubId,
@@ -857,8 +923,8 @@ export class ForkableClient {
 				locationAddress: delivery.address.formatted,
 				restaurantName: menu.venue.displayName || menu.venue.name,
 				meal,
-				appliedSelections: [],
-				replacedExistingOrder: false,
+				appliedSelections,
+				replacedExistingOrder: Boolean(existingOrder),
 			};
 		}
 	}

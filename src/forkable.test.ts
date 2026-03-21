@@ -401,7 +401,7 @@ describe("ForkableClient", () => {
 				me: { id: 1, email: "user@example.com" },
 			});
 			mockGraphQL({
-				replacePiece: {
+				result: {
 					errors: null,
 					errorDetails: {},
 					delivery: {
@@ -449,6 +449,122 @@ describe("ForkableClient", () => {
 				},
 				myMeals: true,
 				oldPieceId: "old-piece",
+			});
+		});
+
+		it("uses addPiece for a new order and supports fuzzy modifier and option names", async () => {
+			mockGraphQL({
+				myDeliveries: [
+					{
+						id: 1151811,
+						forDeliveryAt: "2026-03-27T12:00:00.000Z",
+						isReadOnly: false,
+						mealClubId: 3916,
+						availableMenuIds: [16793],
+						address: { formatted: "75 Varick St, New York, NY 10013, USA" },
+						club: { id: 3916, name: "Notion - NY" },
+						orders: [],
+					},
+				],
+			});
+			mockGraphQL({
+				menus: [
+					{
+						id: 16793,
+						name: "menu-16793",
+						displayName: "Grandma's Home",
+						venue: { id: 998, name: "grandmas-home", displayName: "Grandma's Home" },
+						sections: [
+							{
+								items: [
+									{
+										id: 10,
+										menuId: 16793,
+										name: "Vegan Mapo Tofu Set",
+										description: "Mapo tofu with a required side",
+										price: 18,
+										averageRating: 4.8,
+										disabled: false,
+										ingredientTags: ["vegan"],
+										modifiers: [
+											{
+												id: 14,
+												name: "Choose Side",
+												min: 1,
+												max: 1,
+												required: true,
+												options: [
+													{ id: 15, name: "Lotus Root with Sticky Rice", price: 0 },
+													{ id: 16, name: "Tofu Skin Rolls", price: 0 },
+												],
+											},
+										],
+									},
+								],
+							},
+						],
+					},
+				],
+			});
+			mockGraphQL({
+				me: { id: 1, email: "user@example.com" },
+			});
+			mockGraphQL({
+				result: {
+					errors: null,
+					errorDetails: {},
+					delivery: {
+						id: 1151811,
+						forDeliveryAt: "2026-03-27T12:00:00.000Z",
+						address: { formatted: "75 Varick St, New York, NY 10013, USA" },
+						orders: [],
+					},
+				},
+			});
+
+			const client = new ForkableClient(SESSION_COOKIE);
+			const result = await client.orderMealForDate({
+				date: "2026-03-27",
+				mealName: "Vegan Mapo Tofu Set",
+				mealId: null,
+				menuId: null,
+				restaurantName: null,
+				locationId: 3916,
+				locationName: null,
+				instructions: null,
+				selections: [{ modifier: "Side", option: "Tofu Skin Roll" }],
+			});
+
+			expect(result).toMatchObject({
+				success: true,
+				date: "2026-03-27",
+				deliveryId: 1151811,
+				locationId: 3916,
+				locationName: "Notion - NY",
+				restaurantName: "Grandma's Home",
+				appliedSelections: [{ modifier: "Choose Side", option: "Tofu Skin Rolls" }],
+			});
+
+			const replacePieceBody = JSON.parse(
+				mockFetch.mock.calls[3][1].body as string,
+			) as {
+				query: string;
+				variables: {
+					input: Record<string, unknown>;
+				};
+			};
+			expect(replacePieceBody.query).toContain("result: addPiece");
+			expect(replacePieceBody.query).toContain("AddPieceInput!");
+			expect(replacePieceBody.variables.input).toEqual({
+				deliveryId: 1151811,
+				itemId: 10,
+				menuId: 16793,
+				userId: 1,
+				instructions: null,
+				selectionsHash: {
+					14: [16],
+				},
+				myMeals: true,
 			});
 		});
 
