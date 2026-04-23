@@ -1,20 +1,21 @@
 # forkable-worker
 
-`forkable-worker` is a TypeScript Notion Worker that turns Forkable lunch ordering into worker tools. It authenticates to Forkable with your session cookie, reads the available menus for a date, shows your current order, and can place or replace a meal order on your behalf.
+`forkable-worker` is a TypeScript Notion Worker that turns Forkable lunch ordering into worker tools. It authenticates to Forkable with your session cookie, reads the available menus for a date, shows your current and past orders, and can place or replace a meal order on your behalf.
 
 ## What This Repo Can Do
 
-- Expose `getRestaurantsAndMealsForDate` to list every orderable meal for a `YYYY-MM-DD` date, grouped by delivery location and restaurant.
+- Expose `getRestaurantsAndMealsForDate` to list every orderable meal for a `YYYY-MM-DD` date, grouped by delivery location and restaurant, with price and description inline.
 - Expose `getCurrentOrderForDate` to show your current order for a date, optionally narrowed to one location.
+- Expose `getPastOrders` to look back at your order history across all delivery locations (defaults to the last 10 weeks) so you can review what you've been ordering.
 - Expose `orderMealForDate` to place or replace an editable order by exact `mealId` + `menuId` or by a meal-name search.
 - Validate date format, location filters, ambiguous meal matches, and required Forkable modifier selections before sending an order.
 - Return structured results that are suitable for a Notion worker tool surface.
 
 ## How It Works
 
-- [`src/index.ts`](./src/index.ts) registers the worker and its three public tools.
+- [`src/index.ts`](./src/index.ts) registers the worker and its four public tools.
 - [`src/forkable.ts`](./src/forkable.ts) wraps the Forkable GraphQL API and contains the matching, validation, and order-submission logic.
-- [`src/forkable.test.ts`](./src/forkable.test.ts) covers the main behavior: menu listing, current-order lookup, exact ordering, ambiguity handling, and required selection validation.
+- [`src/forkable.test.ts`](./src/forkable.test.ts) covers the main behavior: menu listing, current-order lookup, past-order history, exact ordering, ambiguity handling, and required selection validation.
 
 The worker authenticates by sending your Forkable `_easyorder_session` cookie as the value of `FORKABLE_SESSION_COOKIE`. The worker acts as the Forkable user tied to that session.
 
@@ -35,7 +36,7 @@ What it returns:
 - Deliveries for that date.
 - Each delivery's location metadata.
 - Restaurants and meals available at that location.
-- Meal list entries that include exact `mealId` and `menuId`, which are the safest identifiers to use when ordering.
+- Meal list entries formatted as `<name> [<mealId>/<menuId>] $<price> [req:<modifier>] [opt] — <description>`, which include the exact `mealId` and `menuId` to use when ordering.
 
 ### `getCurrentOrderForDate`
 
@@ -54,6 +55,30 @@ What it returns:
 - Your current order, if any, for each delivery on that date.
 - The delivery location and address.
 - Chosen selections and any special instructions on the existing order.
+
+### `getPastOrders`
+
+Input:
+
+```json
+{
+  "weeks": 10,
+  "endDate": null
+}
+```
+
+Both fields are nullable. `weeks` defaults to `10`. `endDate` defaults to today and anchors the end of the window; the start is computed as `endDate - weeks * 7 days`.
+
+What it returns:
+
+- A flat list of your past orders within the window, newest first.
+- Each order includes the delivery date, location, meal name and description, price, state, instructions, and chosen selections.
+- The descriptions are looked up from each delivery's menu (grouped per meal club), so they reflect what the meal was when you ordered it; if a menu is no longer fetchable, `mealDescription` is `null`.
+
+Notes:
+
+- Forkable's `myDeliveries` field only returns historical pieces when a `to` bound is passed, which this tool does. Older snapshots of the API that only pass `from` will come back with pieces stripped.
+- Orders by other users on the same delivery are filtered out by matching on the session's viewer email.
 
 ### `orderMealForDate`
 
@@ -152,15 +177,25 @@ You need to provide `FORKABLE_SESSION_COOKIE` in both places:
 
 Without that secret, the worker cannot authenticate to Forkable.
 
-### 3. Add your own deployment workflow
+### 3. Deploy
 
-The repo currently only ships:
+Once `workers.json` and the secret are in place, deploy with the `ntn` CLI:
 
-- `npm run build`
-- `npm run check`
-- `npm test`
+```sh
+ntn workers deploy
+```
 
-If you want one-command deployment, add the scripts or CLI integration that match your Notion Workers environment. This repo assumes you already have a Notion Workers deployment path and just need the worker source, config files, and secret values.
+See the [Deploying](#deploying) section below for details.
+
+## Deploying
+
+The worker is deployed with the `ntn` CLI using the `workers.json` at the root of the repo, which pins the environment (`dev`), workspace, and worker ID:
+
+```sh
+ntn workers deploy
+```
+
+The environment is selected by the `environment` field in `workers.json`, not by a CLI flag. Make sure `FORKABLE_SESSION_COOKIE` is configured on the deployed worker environment before invoking any tool.
 
 ## Customizing It
 
