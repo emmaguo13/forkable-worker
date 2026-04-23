@@ -3,8 +3,10 @@ import type {
 	CurrentOrderForDateInput,
 	CurrentOrderForDateResult,
 	DayMealsResult,
+	GetPastOrdersInput,
 	OrderMealInput,
 	OrderMealResult,
+	PastOrdersResult,
 } from "./forkable.js";
 import { ForkableClient } from "./forkable.js";
 
@@ -50,6 +52,25 @@ worker.tool<CurrentOrderForDateInput, CurrentOrderForDateResult>("getCurrentOrde
 	}),
 	execute: async (input) => {
 		return getClient().getCurrentOrderForDate(input);
+	},
+});
+
+worker.tool<GetPastOrdersInput, PastOrdersResult>("getPastOrders", {
+	title: "Get Past Orders",
+	description:
+		"Returns your past Forkable meal orders across every delivery location so you can see what you've been ordering. Defaults to the past 10 weeks. Pass weeks to change the window or endDate (YYYY-MM-DD) to anchor to a specific day instead of today.",
+	schema: j.object({
+		weeks: j
+			.number()
+			.nullable()
+			.describe("Number of weeks of history to return. Defaults to 10 when null."),
+		endDate: j
+			.string()
+			.nullable()
+			.describe("Optional anchor date in YYYY-MM-DD format. Defaults to today when null."),
+	}),
+	execute: async (input) => {
+		return getClient().getPastOrders(input);
 	},
 });
 

@@ -239,6 +239,37 @@ export interface OrderMealResult {
 	[key: string]: JsonValue;
 }
 
+export interface GetPastOrdersInput {
+	weeks: number | null;
+	endDate: string | null;
+	[key: string]: JsonValue;
+}
+
+export interface PastOrderSummary {
+	date: string;
+	deliveryId: number;
+	locationId: number;
+	locationName: string;
+	mealId: number;
+	menuId: number;
+	mealName: string;
+	mealDescription: string | null;
+	price: number;
+	state: string;
+	instructions: string | null;
+	selections: string[];
+	[key: string]: JsonValue;
+}
+
+export interface PastOrdersResult {
+	fromDate: string;
+	toDate: string;
+	weeks: number;
+	orderCount: number;
+	orders: PastOrderSummary[];
+	[key: string]: JsonValue;
+}
+
 type CandidateMeal = {
 	delivery: ForkableDelivery;
 	menu: ForkableMenu;
@@ -356,9 +387,10 @@ function mealToListEntry(item: ForkableMenuItem): string {
 	const required = (item.modifiers ?? [])
 		.filter((modifier) => !modifier.hidden && modifier.required)
 		.map((modifier) => `${modifier.name}(${modifier.options.length})`);
+	const description = (item.description ?? "").trim();
 	return `${summary.name} [${summary.mealId}/${summary.menuId}] $${summary.price.toFixed(2)}${
 		required.length > 0 ? ` req:${required.join("; ")}` : ""
-	}${summary.hasOptionalSelections ? " opt" : ""}`;
+	}${summary.hasOptionalSelections ? " opt" : ""}${description ? ` — ${description}` : ""}`;
 }
 
 function existingOrderPieceForDelivery(
@@ -483,12 +515,15 @@ export class ForkableClient {
 		return data.me;
 	}
 
-	async getDeliveries(from: string): Promise<ForkableDelivery[]> {
+	async getDeliveries(from: string, to?: string): Promise<ForkableDelivery[]> {
 		assertIsoDate(from);
+		if (to !== undefined) {
+			assertIsoDate(to);
+		}
 		const data = await this.graphql<GraphQLDeliveriesResponse>(
 			`
-				query Deliveries($from: Date!) {
-					myDeliveries(from: $from) {
+				query Deliveries($from: Date!, $to: Date) {
+					myDeliveries(from: $from, to: $to) {
 						id
 						forDeliveryAt
 						isReadOnly
@@ -512,7 +547,7 @@ export class ForkableClient {
 					}
 				}
 			`,
-			{ from },
+			{ from, to: to ?? null },
 		);
 		return data.myDeliveries;
 	}
@@ -766,6 +801,99 @@ export class ForkableClient {
 		}
 
 		return { selectionsHash, appliedSelections };
+	}
+
+	async getPastOrders(input: GetPastOrdersInput): Promise<PastOrdersResult> {
+		const weeks = input.weeks ?? 10;
+		if (!Number.isInteger(weeks) || weeks <= 0) {
+			throw new Error(`"weeks" must be a positive integer (got ${weeks}).`);
+		}
+
+		const today = new Date().toISOString().slice(0, 10);
+		const toDate = input.endDate ?? today;
+		assertIsoDate(toDate);
+
+		const toDateObj = new Date(`${toDate}T00:00:00.000Z`);
+		const fromDateObj = new Date(toDateObj.getTime() - weeks * 7 * 24 * 60 * 60 * 1000);
+		const fromDate = fromDateObj.toISOString().slice(0, 10);
+
+		const viewer = await this.getViewer();
+		const deliveries = await this.getDeliveries(fromDate, toDate);
+
+		type RelevantDelivery = { delivery: ForkableDelivery; date: string; piece: ForkableOrderPiece };
+		const relevant: RelevantDelivery[] = [];
+		for (const delivery of deliveries) {
+			const date = deliveryDate(delivery);
+			if (date < fromDate || date > toDate) {
+				continue;
+			}
+
+			const piece = existingOrderPieceForDelivery(delivery, viewer.email);
+			if (!piece) {
+				continue;
+			}
+
+			relevant.push({ delivery, date, piece });
+		}
+
+		const menuIdsByClub = new Map<number, Set<number>>();
+		for (const { piece, delivery } of relevant) {
+			const set = menuIdsByClub.get(delivery.mealClubId) ?? new Set<number>();
+			set.add(piece.menuId);
+			menuIdsByClub.set(delivery.mealClubId, set);
+		}
+
+		const descriptionByMenuItem = new Map<string, string>();
+		await Promise.all(
+			[...menuIdsByClub.entries()].map(async ([clubId, menuIds]) => {
+				try {
+					const menus = await this.getMenus([...menuIds], clubId);
+					for (const menu of menus) {
+						for (const section of menu.sections ?? []) {
+							for (const item of section.items ?? []) {
+								const description = (item.description ?? "").trim();
+								if (description) {
+									descriptionByMenuItem.set(`${menu.id}:${item.id}`, description);
+								}
+							}
+						}
+					}
+				} catch {
+					// Old menus may no longer be fetchable — leave descriptions null for those.
+				}
+			}),
+		);
+
+		const orders: PastOrderSummary[] = relevant.map(({ delivery, date, piece }) => ({
+			date,
+			deliveryId: delivery.id,
+			locationId: delivery.mealClubId,
+			locationName: locationName(delivery),
+			mealId: piece.itemId,
+			menuId: piece.menuId,
+			mealName: piece.name,
+			mealDescription: descriptionByMenuItem.get(`${piece.menuId}:${piece.itemId}`) ?? null,
+			price: piece.price,
+			state: piece.state,
+			instructions: piece.instructions,
+			selections: (piece.nonHiddenAttributes ?? []).map(
+				(selection) => `${selection.label}: ${selection.value}`,
+			),
+		}));
+
+		orders.sort((left, right) =>
+			left.date === right.date
+				? left.locationName.localeCompare(right.locationName)
+				: right.date.localeCompare(left.date),
+		);
+
+		return {
+			fromDate,
+			toDate,
+			weeks,
+			orderCount: orders.length,
+			orders,
+		};
 	}
 
 	async orderMealForDate(input: OrderMealInput): Promise<OrderMealResult> {

@@ -132,8 +132,8 @@ describe("ForkableClient", () => {
 				{
 					restaurantName: "Cafe Good",
 					meals: [
-						"Chicken Bowl [501/10] $18.00",
-						"Tofu Bowl [502/11] $17.00",
+						"Chicken Bowl [501/10] $18.00 — Grain bowl",
+						"Tofu Bowl [502/11] $17.00 — Tofu bowl",
 					],
 				},
 			]);
@@ -294,6 +294,158 @@ describe("ForkableClient", () => {
 				],
 			});
 			expect(mockFetch).toHaveBeenCalledTimes(2);
+		});
+	});
+
+	describe("getPastOrders", () => {
+		it("returns the user's orders within the requested past window", async () => {
+			mockGraphQL({
+				me: { id: 1, email: "user@example.com" },
+			});
+			mockGraphQL({
+				myDeliveries: [
+					{
+						id: 300,
+						forDeliveryAt: "2026-04-15T12:00:00.000Z",
+						isReadOnly: true,
+						mealClubId: 3916,
+						availableMenuIds: [10],
+						address: { formatted: "75 Varick St, New York, NY 10013, USA" },
+						club: { id: 3916, name: "Notion - NY" },
+						orders: [
+							{
+								pieces: [
+									{
+										id: "piece-300",
+										itemId: 501,
+										menuId: 10,
+										name: "Chicken Bowl",
+										price: 18,
+										state: "delivered",
+										instructions: "extra hot",
+										user: { email: "user@example.com" },
+										nonHiddenAttributes: [{ label: "Choose Side", value: "Rice" }],
+									},
+								],
+							},
+						],
+					},
+					{
+						id: 301,
+						forDeliveryAt: "2026-04-08T12:00:00.000Z",
+						isReadOnly: true,
+						mealClubId: 3916,
+						availableMenuIds: [10],
+						address: { formatted: "75 Varick St, New York, NY 10013, USA" },
+						club: { id: 3916, name: "Notion - NY" },
+						orders: [
+							{
+								pieces: [
+									{
+										id: "piece-coworker",
+										itemId: 777,
+										menuId: 10,
+										name: "Tofu Bowl",
+										price: 17,
+										state: "delivered",
+										instructions: null,
+										user: { email: "someone-else@example.com" },
+										nonHiddenAttributes: [],
+									},
+								],
+							},
+						],
+					},
+					{
+						id: 302,
+						forDeliveryAt: "2026-04-30T12:00:00.000Z",
+						isReadOnly: false,
+						mealClubId: 3916,
+						availableMenuIds: [10],
+						address: { formatted: "75 Varick St, New York, NY 10013, USA" },
+						club: { id: 3916, name: "Notion - NY" },
+						orders: [
+							{
+								pieces: [
+									{
+										id: "piece-future",
+										itemId: 502,
+										menuId: 10,
+										name: "Future Meal",
+										price: 20,
+										state: "ordered",
+										instructions: null,
+										user: { email: "user@example.com" },
+										nonHiddenAttributes: [],
+									},
+								],
+							},
+						],
+					},
+				],
+			});
+			mockGraphQL({
+				menus: [
+					{
+						id: 10,
+						name: "menu-10",
+						displayName: "Cafe Good",
+						venue: { id: 200, name: "cafe-good", displayName: "Cafe Good" },
+						sections: [
+							{
+								items: [
+									{
+										id: 501,
+										menuId: 10,
+										name: "Chicken Bowl",
+										description: "Grain bowl with chicken",
+										price: 18,
+										averageRating: null,
+										disabled: false,
+										ingredientTags: [],
+										modifiers: [],
+									},
+								],
+							},
+						],
+					},
+				],
+			});
+
+			const client = new ForkableClient(SESSION_COOKIE);
+			const result = await client.getPastOrders({
+				weeks: 10,
+				endDate: "2026-04-23",
+			});
+
+			expect(result).toEqual({
+				fromDate: "2026-02-12",
+				toDate: "2026-04-23",
+				weeks: 10,
+				orderCount: 1,
+				orders: [
+					{
+						date: "2026-04-15",
+						deliveryId: 300,
+						locationId: 3916,
+						locationName: "Notion - NY",
+						mealId: 501,
+						menuId: 10,
+						mealName: "Chicken Bowl",
+						mealDescription: "Grain bowl with chicken",
+						price: 18,
+						state: "delivered",
+						instructions: "extra hot",
+						selections: ["Choose Side: Rice"],
+					},
+				],
+			});
+
+			const deliveriesBody = JSON.parse(mockFetch.mock.calls[1][1].body as string) as {
+				variables: { from: string; to: string };
+			};
+			expect(deliveriesBody.variables.from).toBe("2026-02-12");
+			expect(deliveriesBody.variables.to).toBe("2026-04-23");
 		});
 	});
 
