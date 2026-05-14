@@ -28,8 +28,8 @@ describe("ForkableClient", () => {
 						isReadOnly: true,
 						mealClubId: 3916,
 						availableMenuIds: [10, 11],
-						address: { formatted: "75 Varick St, New York, NY 10013, USA" },
-						club: { id: 3916, name: "Notion - NY" },
+						address: { formatted: "<address>" },
+						club: { id: 3916, name: "NY" },
 						orders: [
 							{
 								pieces: [
@@ -125,7 +125,7 @@ describe("ForkableClient", () => {
 			expect(result.deliveries[0]).toMatchObject({
 				deliveryId: 100,
 				locationId: 3916,
-				locationName: "Notion - NY",
+				locationName: "NY",
 				isReadOnly: true,
 			});
 			expect(result.deliveries[0].restaurants).toEqual([
@@ -153,8 +153,8 @@ describe("ForkableClient", () => {
 						isReadOnly: true,
 						mealClubId: 3916,
 						availableMenuIds: [10],
-						address: { formatted: "75 Varick St, New York, NY 10013, USA" },
-						club: { id: 3916, name: "Notion - NY" },
+						address: { formatted: "<address>" },
+						club: { id: 3916, name: "NY" },
 						orders: [
 							{
 								pieces: [
@@ -179,8 +179,8 @@ describe("ForkableClient", () => {
 						isReadOnly: true,
 						mealClubId: 3902,
 						availableMenuIds: [11],
-						address: { formatted: "685 Market St, San Francisco, CA 94105, USA" },
-						club: { id: 3902, name: "Notion - SF" },
+						address: { formatted: "<address>" },
+						club: { id: 3902, name: "SF" },
 						orders: [],
 					},
 				],
@@ -213,8 +213,8 @@ describe("ForkableClient", () => {
 						deliveryId: 200,
 						date: "2025-09-22",
 						locationId: 3916,
-						locationName: "Notion - NY",
-						locationAddress: "75 Varick St, New York, NY 10013, USA",
+						locationName: "NY",
+						locationAddress: expect.any(String),
 						isReadOnly: true,
 						order: {
 							pieceId: "piece-ny",
@@ -232,8 +232,8 @@ describe("ForkableClient", () => {
 						deliveryId: 201,
 						date: "2025-09-22",
 						locationId: 3902,
-						locationName: "Notion - SF",
-						locationAddress: "685 Market St, San Francisco, CA 94105, USA",
+						locationName: "SF",
+						locationAddress: expect.any(String),
 						isReadOnly: true,
 						order: null,
 					},
@@ -253,8 +253,8 @@ describe("ForkableClient", () => {
 						isReadOnly: true,
 						mealClubId: 3916,
 						availableMenuIds: [10],
-						address: { formatted: "75 Varick St, New York, NY 10013, USA" },
-						club: { id: 3916, name: "Notion - NY" },
+						address: { formatted: "<address>" },
+						club: { id: 3916, name: "NY" },
 						orders: [],
 					},
 					{
@@ -263,8 +263,8 @@ describe("ForkableClient", () => {
 						isReadOnly: true,
 						mealClubId: 3902,
 						availableMenuIds: [11],
-						address: { formatted: "685 Market St, San Francisco, CA 94105, USA" },
-						club: { id: 3902, name: "Notion - SF" },
+						address: { formatted: "<address>" },
+						club: { id: 3902, name: "SF" },
 						orders: [],
 					},
 				],
@@ -286,8 +286,8 @@ describe("ForkableClient", () => {
 						deliveryId: 201,
 						date: "2025-09-22",
 						locationId: 3902,
-						locationName: "Notion - SF",
-						locationAddress: "685 Market St, San Francisco, CA 94105, USA",
+						locationName: "SF",
+						locationAddress: expect.any(String),
 						isReadOnly: true,
 						order: null,
 					},
@@ -310,8 +310,8 @@ describe("ForkableClient", () => {
 						isReadOnly: true,
 						mealClubId: 3916,
 						availableMenuIds: [10],
-						address: { formatted: "75 Varick St, New York, NY 10013, USA" },
-						club: { id: 3916, name: "Notion - NY" },
+						address: { formatted: "<address>" },
+						club: { id: 3916, name: "NY" },
 						orders: [
 							{
 								pieces: [
@@ -336,8 +336,8 @@ describe("ForkableClient", () => {
 						isReadOnly: true,
 						mealClubId: 3916,
 						availableMenuIds: [10],
-						address: { formatted: "75 Varick St, New York, NY 10013, USA" },
-						club: { id: 3916, name: "Notion - NY" },
+						address: { formatted: "<address>" },
+						club: { id: 3916, name: "NY" },
 						orders: [
 							{
 								pieces: [
@@ -362,8 +362,8 @@ describe("ForkableClient", () => {
 						isReadOnly: false,
 						mealClubId: 3916,
 						availableMenuIds: [10],
-						address: { formatted: "75 Varick St, New York, NY 10013, USA" },
-						club: { id: 3916, name: "Notion - NY" },
+						address: { formatted: "<address>" },
+						club: { id: 3916, name: "NY" },
 						orders: [
 							{
 								pieces: [
@@ -428,7 +428,7 @@ describe("ForkableClient", () => {
 						date: "2026-04-15",
 						deliveryId: 300,
 						locationId: 3916,
-						locationName: "Notion - NY",
+						locationName: "NY",
 						mealId: 501,
 						menuId: 10,
 						mealName: "Chicken Bowl",
@@ -477,8 +477,8 @@ describe("ForkableClient", () => {
 						isReadOnly: false,
 						mealClubId: 3916,
 						availableMenuIds: [10],
-						address: { formatted: "75 Varick St, New York, NY 10013, USA" },
-						club: { id: 3916, name: "Notion - NY" },
+						address: { formatted: "<address>" },
+						club: { id: 3916, name: "NY" },
 						orders: [
 							{
 								pieces: [
@@ -559,7 +559,7 @@ describe("ForkableClient", () => {
 					delivery: {
 						id: 123,
 						forDeliveryAt: "2026-03-05T12:00:00.000Z",
-						address: { formatted: "75 Varick St, New York, NY 10013, USA" },
+						address: { formatted: "<address>" },
 						orders: [],
 					},
 				},
@@ -573,8 +573,8 @@ describe("ForkableClient", () => {
 				date: "2026-03-05",
 				deliveryId: 123,
 				locationId: 3916,
-				locationName: "Notion - NY",
-				locationAddress: "75 Varick St, New York, NY 10013, USA",
+				locationName: "NY",
+				locationAddress: expect.any(String),
 				restaurantName: "Green Kitchen",
 				replacedExistingOrder: true,
 				appliedSelections: [
@@ -613,8 +613,8 @@ describe("ForkableClient", () => {
 						isReadOnly: false,
 						mealClubId: 3916,
 						availableMenuIds: [16793],
-						address: { formatted: "75 Varick St, New York, NY 10013, USA" },
-						club: { id: 3916, name: "Notion - NY" },
+						address: { formatted: "<address>" },
+						club: { id: 3916, name: "NY" },
 						orders: [],
 					},
 				],
@@ -668,7 +668,7 @@ describe("ForkableClient", () => {
 					delivery: {
 						id: 1151811,
 						forDeliveryAt: "2026-03-27T12:00:00.000Z",
-						address: { formatted: "75 Varick St, New York, NY 10013, USA" },
+						address: { formatted: "<address>" },
 						orders: [],
 					},
 				},
@@ -692,7 +692,7 @@ describe("ForkableClient", () => {
 				date: "2026-03-27",
 				deliveryId: 1151811,
 				locationId: 3916,
-				locationName: "Notion - NY",
+				locationName: "NY",
 				restaurantName: "Grandma's Home",
 				appliedSelections: [{ modifier: "Choose Side", option: "Tofu Skin Rolls" }],
 			});
@@ -729,8 +729,8 @@ describe("ForkableClient", () => {
 						isReadOnly: false,
 						mealClubId: 3916,
 						availableMenuIds: [10, 11],
-						address: { formatted: "75 Varick St, New York, NY 10013, USA" },
-						club: { id: 3916, name: "Notion - NY" },
+						address: { formatted: "<address>" },
+						club: { id: 3916, name: "NY" },
 						orders: [],
 					},
 				],
@@ -778,8 +778,8 @@ describe("ForkableClient", () => {
 						isReadOnly: false,
 						mealClubId: 3916,
 						availableMenuIds: [10],
-						address: { formatted: "75 Varick St, New York, NY 10013, USA" },
-						club: { id: 3916, name: "Notion - NY" },
+						address: { formatted: "<address>" },
+						club: { id: 3916, name: "NY" },
 						orders: [],
 					},
 				],

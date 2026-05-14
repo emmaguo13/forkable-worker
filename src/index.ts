@@ -48,7 +48,7 @@ worker.tool<CurrentOrderForDateInput, CurrentOrderForDateResult>("getCurrentOrde
 		locationName: j
 			.string()
 			.nullable()
-			.describe("Optional delivery location name filter, such as 'Notion - NY'."),
+			.describe("Optional delivery location name filter, such as 'NY' or 'SF'."),
 	}),
 	execute: async (input) => {
 		return getClient().getCurrentOrderForDate(input);
@@ -91,7 +91,7 @@ worker.tool<OrderMealInput, OrderMealResult>("orderMealForDate", {
 		locationName: j
 			.string()
 			.nullable()
-			.describe("Optional delivery location name filter, such as 'Notion - NY'."),
+			.describe("Optional delivery location name filter, such as 'NY' or 'SF'."),
 		instructions: j.string().nullable().describe("Optional special instructions for the order."),
 		selections: j
 			.array(
